@@ -1,0 +1,209 @@
+---
+title: "HW4"
+author: "Pooja Patel"
+date: "3/12/2021"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(5210)
+
+```
+
+##1: Minimum Wage Increases
+
+
+```{r cars}
+
+Manning <- readRDS("Manning.rds") # assuming your working directory is HW4 
+str(Manning)
+```
+
+#1.1 Frequentist Inference 
+
+
+His first specification, he basically states that the "impact of the log minimum wage on mean log hourly wages" has a "95% confidence level", which is fairly frequentist, since it argues a causal impact through a regression technique wihtout taking many draws out of a distribution and applying bayesian inference. He does mention the problem with the specifications, but he claims the estimated impacts of the minimum wage is "in line with what would be expected" and "robust to different specifications", meaning he takes the route of arguing against omitted variable bias by providing different specifications that include more covariates, rather than conditioning on a prior. He mentions significant and variance in the coefficients as well, which is fairly frequentist. He changes the dependent variable a few times to check for the impact on other economic variables, and does subset between age groups to look at the impacts, but calls the coefficient essentially an elasticity, implying, again, a causal pathway with his specifications. He does claim that it implies occasionaly that the elasticity of teen wages with respect to minimum wages is a constant, which is a good point against the frequentist direction. 
+
+He does, however, have entire sections in his paper about criticisms of his own methodology and specification, and calls some effects, especially the employment effect, "elusive". He leans on the literature (which have frequentist type regressions as well) in ruling out omitted variable bias. He also cross-checks by using different data as robustness checks, which is all fairly frequentist when trying to argue for a causal effect. His overall point, though, is less frequentist than expected: it is that the effect overall is elusive, and perhaps the focus should shift elsewhere. 
+
+Also, his data is not a random sample from an overall population; it is employment and minimum wage data. Thus a potential outcomes framework is not necessarily possible when there is no randomization naturally in the dataset. 
+
+Naturally, when trying to find the impact of minimum wage on employment, since employment is "elusive", as he mentioned, using bayesian inference would have gone a long way, since then one could draw from various distributions on prior beliefs and have a distribution in the end with a general probability rather than a confidence interval based on a t-statistic. 
+
+#1.2 Bayesian Inference 
+Here, I deduced the minimum wage as on average higher for young adults than it is for teens (20 over 10). And also that the deviance is higher as a young adult since there is more of a possibility of college education etc. that creates higher variance, thus higher scales for young adults than for teens. Also, my prior beliefs for R^2 are shown; I thought the older teens would have more of the variance in log real wages explained by the covariates included. 
+```{r}
+library(rstan)
+library(rstanarm)
+
+#For ages [20, 24] below
+young_adults<- stan_lm(log(rw) ~ log(min_mw) +unem_rate+ teen_perc+state+ as.integer(time)+ state:as.integer(time),
+        data= Manning,
+        subset= (age<= 24 & age>= 20),
+        prior_intercept=normal(location=log(20), scale=log(10)), 
+        prior= R2(.60, what= 'median'), seed=12345)
+
+#For ages [16, 19] below
+
+old_teens<-stan_lm(log(rw) ~ log(min_mw) +unem_rate+ teen_perc+state+ as.integer(time)+ state:as.integer(time),
+        data= Manning,
+        subset=(age<= 19 & age>= 16),
+        prior_intercept=normal(location=log(10), scale=log(2)), 
+        prior= R2(.75, what= 'mean'), seed=12345)
+
+```
+```{r}
+print(young_adults)
+
+```
+```{r}
+print(old_teens)
+```
+
+#1.3 Interpretation
+How would you describe your posterior beliefs about the coefficient(s) on the logarithm of the minimum wage (in the two models)? To what extent are your conclusions similar to those of Manning?
+
+For the young adults (Age 20-24), my intercept is 2.1 and coefficient is .2, with an error of .4. This coefficient is not that far from Manning's coefficient of .05, and is within Manning's confidence intervals. This implies there may be a positive connection between log minimum wages and employment. 
+For the older teens (Age 16-19), my intercept is 1.6, coefficient is .4, and an error of .3. Manning has a coefficient of .1, which is much lower, and his interval is overall much lower than my intercept. Accounting even for error, this intercept does not fall into the interval. This makes me much less confident about the power of the coefficient on log minimum wages for this age group, however considering we used bayesian methods, would lean more on the .4, implying that perhaps Manning's estimates were biased negatively. 
+
+I will say that with the high rates of error, that I agree with Manning that the effect of log minimum wages is elusive. 
+#1.4 Prediction
+```{r}
+library(rstan)
+library(rstanarm)
+recent <- dplyr::filter(Manning, age <= 19, time == "2019.4")
+a=posterior_predict(old_teens, newdata= recent)
+prediction_1=exp(a) #converts to dollars
+recent_ <- dplyr::mutate(recent, min_mw = pmax(min_mw, 15))
+b=posterior_predict(old_teens, newdata= recent_)
+prediction_2=exp(b)
+```
+
+#Prediction_1: 
+```{r}
+hist(prediction_1)
+
+```
+Notice we only used recent data for this histogram, so this shows the prediction for the distribution of the minimum wage recently (the last quarter of 2019). It's distributed around $10, but it looks like most of the wage is between 5-15 dollars. The histogram information is below: 
+```{r}
+library(psych)
+describe(prediction_1)
+```
+This one is more interesting in that we took the maximum between the $15 and the minimum wage in that state, meaning there was a price floor with an instated minimum wage. Generally it still looks distributed in the same region except there is more right skew, implying more people are getting paid between 10-20 dollars; the center has slightly shifted to the right. 
+```{r}
+hist(prediction_2)
+
+```
+```{r}
+describe(prediction_2)
+```
+If we compare these statistics, we can see that the mean has increased on all levels across all variables as compared to before the minimum wage was instated in the last quarter of 2019. The mean is from 12-13, rather than from 10-11, and the center has shifted to the right as we can see in the graph. Notice, though, the variance has increased as well in the second graph over the first. The median wages across the board have increased as well, and it seems it has mainly done so due to the increase in "max" wages, most likely due to the price floor instated by the minimum wage. Thus a last quarter effective minimum wage floor would seem to shift teenage distributions in wages, based on this data. 
+
+
+
+#2
+```{r}
+Eggers <- readRDS("Eggers.rds") # assuming your working directory is HW4 summary(Eggers$rrv) 
+summary(Eggers$rrv)
+```
+
+```{r}
+Eggers$PR <- as.integer(Eggers$rrv >= 0) # has a PR system
+```
+
+#2.1
+```{r}
+source(file.path("..", "..", "Week05", "GLD_helpers.R"))
+a_s<- list(beta0= GLD_solver_bounded(bounds= c(60, 97), median=75, IQR= 20),
+           beta1= GLD_solver_bounded(bounds= c(-3.5,2.3), median= 1, IQR= 2), 
+           sigma= GLD_solver_bounded(bounds= c(0, 2), median= 1.5, IQR=1.8),
+           tao= GLD_solver_bounded(bounds= c(-.02,3.2), median= .2, IQR=2.5), 
+           beta2= GLD_solver_bounded(bounds= c(-1, 1), median=.5 , IQR= 1)
+)
+```
+
+```{r}
+vote_<- t(replicate(1000, {
+        beta0_<- qgld(runif(1), median= 75, IQR=20, asymmetry= a_s$beta0[1], steepness= a_s$beta0[2])
+        beta2_<- qgld(runif(1), median=.5, IQR= 1, asymmetry= a_s$beta2[1], steepness= a_s$beta2[2] )
+        tao_<- qgld(runif(1), median= .2, IQR= 2.5, asymmetry= a_s$tao[1], steepness= a_s$tao[2])
+        
+        
+        
+        sigma_<- qgld(runif(1), median= 1.5, IQR= 1.8, asymmetry= a_s$sigma[1], steepness=a_s$sigma[2])
+        
+        
+        beta1_<-qgld(runif(1), median= .9, IQR= 2, asymmetry= a_s$beta1[1], steepness= a_s$beta1[2])
+        mu_<- beta0_ + tao_*Eggers$PR+ beta1_*Eggers$rrv + beta2_*Eggers$PR*Eggers$rrv
+        epsilon_<- rnorm(n= length(mu_), mean= 0, sd= sigma_)
+        y_<- mu_ + epsilon_
+        y_
+        
+}))
+```
+
+#2.2 
+```{r}
+colnames(vote_)<-Eggers$com.name
+summary(vote_[,'Toulouse'])
+library(dplyr)
+
+
+```
+
+```{r}
+columns <- filter(Eggers, Eggers$PSDC99 >= 1750 & Eggers$PSDC99 <= 5250) %>% select(com.name)
+satisfied <- vote_[, colnames(vote_) %in% columns$com.name]
+for (i in 1:10) {
+  print(summary(satisfied[, i]))
+}
+```
+
+Toulouse has much more variance but even then is much higher at all levels of the quartiles and means for its prior predictive distribution. This means including Toulouse would positively bias the voter turnout interpretations; also Toulouse just has a very high population in general, creating the misleading effect that its voter turnout could be connected to other municipalities'. Essentially Toulouse acts as an outlier in the set, and even thouhg we use distributions that generally do protect against one outlier messing with an entire prediction, it could cause bias. Also the point of using regression discontinuity is to study the change of a certain outcome at the border of a decision. We want to condition on the municipalities with populations centered around the 3500 cutoff, since we want to see the difference of turnout right around the cutoff, since higher populated districts (as well as extremely lowly populated districts) may have characteristics that push towards higher or lower turnout overall that have no connection to the plurality versus PR system rule. 
+
+For example, if one lives in Toulouse and doesn't think of oneself as a particularly pivotal vote due to the high population, one may not vote, and if enoguh people think like this, perhaps the turnout is very low. Or, perhaps there is motivation to vote in Toulouse (outside of the voting system itself). 
+
+The assumption we keep overall is that our min to max turnout is a little skinnier distribution than if toulouse were included, and has lower voter turnouts than if toulouse were included. We assume that the voter in district with a population of 3499 versus 3501 changes his/her decision to turnout for vote solely based on the change of PR versus plural system. 
+
+
+#2.3
+
+
+```{r}
+library(rstanarm)
+library(rstan)
+post<-stan_glm(to.2008 ~ rrv + PR + rrv : PR,
+               family= gaussian, 
+               data= Eggers, 
+               subset= (PSDC99<= 5250 & PSDC99>= 1750),
+               prior_intercept= normal(location=75 , scale=20),
+               prior= normal(location= c(.2, .9,.5), scale=c(2.5, 2, 1)), 
+               prior_aux= exponential(rate= 2/3),
+               seed= 1234
+               )
+
+```
+```{r}
+print(post)
+summary(post)
+```
+#2.4
+The average coefficient on tao was .8, meaning that if the PR system was followed, there was .8 more chance on average of having more voter turnout.
+#2.5
+```{r}
+Eggers_missing <- dplyr::filter(Eggers, PSDC99 >= 1750, PSDC99 <= 5250, is.na(to.2008)) 
+Eggers_missing$to.2008 <- NULL
+```
+
+```{r}
+post_predicted= posterior_predict(post, newdata= Eggers_missing)
+```
+
+```{r}
+hist(post_predicted)
+```
+
+Yes, this seems reasonable considering the voter turnout is still centered around 70, when the mean we got on the other estimation was about 68 voter turnout as the coefficient, so it is centered around the mean, and has a distribution around what is predicted for voter turnout. 

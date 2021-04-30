@@ -1,0 +1,189 @@
+---
+title: "HW3_submission"
+author: "Pooja Patel"
+date: "2/23/2021"
+output: pdf_document
+---
+
+
+
+
+#Problem 1
+```{r}
+set.seed(5210)
+stops <- readRDS("north_carolina.rds") 
+head(stops)
+```
+#1.1
+```{r}
+prior_PD <- function(stops){
+D <- nrow(stops)
+R <- ncol(stops)
+searches_hits <- array(0, dim = c(D, R, 2), dimnames =
+list(rownames(stops), colnames(stops), c("searches", "hits"))) 
+#The largest police department, as per the paper, has phi_d and lambda_d as 0. 
+for(j in 1:4){
+ phi_r <- rnorm(1, 0, 2)
+      lambda_r <- rnorm(1, 0, 2)
+      mu_phi <- rnorm(1, 0, 2)
+      sigma_phi <- abs(rnorm(1, 0, 1))
+      phi_d <-0
+      mu_lambda <- rnorm(1, 0, 2)
+      sigma_lambda <- abs(rnorm(1, 0, 1))
+      lambda_d <-0
+      phi_rd <- plogis(phi_r + phi_d)
+      lambda_rd <- exp(lambda_r + lambda_d)
+      p <- rbeta(1, phi_rd*lambda_rd, (1-phi_rd)*lambda_rd)
+      mu_t <- rnorm(1, 0, 2)
+      sigma_t <- abs(rnorm(1, 0, 1))
+      t_rd <- plogis(rnorm(1, mu_t, sigma_t))
+      if (p >= t_rd) {
+        searches_hits[1, j, 1] <- 1
+        searches_hits[1, j, 2]<- rbinom(1, 1, p)
+      } else {
+        searches_hits[1, j, 1] <- 0
+        searches_hits[1, j, 2] <- 0
+      }
+    }
+#All other police departments go by the allocated distributions mentioned in the paper
+for (i in 2:D) {
+    for (j in 1:R) {
+      phi_r <- rnorm(1, 0, 2)
+      lambda_r <- rnorm(1, 0, 2)
+      mu_phi <- rnorm(1, 0, 2)
+      sigma_phi <- abs(rnorm(1, 0, 1))
+      phi_d <-rnorm(1, mu_phi, sigma_phi)
+      mu_lambda <- rnorm(1, 0, 2)
+      sigma_lambda <- abs(rnorm(1, 0, 1))
+      lambda_d <-rnorm(1, mu_lambda, sigma_lambda)
+      phi_rd <- plogis(phi_r + phi_d)
+      lambda_rd <- exp(lambda_r + lambda_d)
+      p <- rbeta(1, phi_rd*lambda_rd, (1-phi_rd)*lambda_rd)
+      mu_t <- rnorm(1, 0, 2)
+      sigma_t <- abs(rnorm(1, 0, 1))
+      t_rd <- plogis(rnorm(1, mu_t, sigma_t))
+      if (p >= t_rd) {
+        searches_hits[i, j, 1] <- 1
+        searches_hits[i, j, 2]<- rbinom(1, 1, p)
+      } else {
+        searches_hits[i, j, 1] <- 0
+        searches_hits[i, j, 2] <- 0
+      }
+    }
+}
+return(searches_hits)
+}
+
+prior_PD(stops)
+```
+#1.2
+```{r}
+
+draws<- replicate(1000, prior_PD(stops), simplify= 'array')
+
+
+unc_searches <- draws[85, , 'searches', ]
+unc_hits <- draws[85, , 'hits', ]
+unc_searchesdf<-data.frame(unc_searches)
+unc_hitsdf<-data.frame(unc_hits)
+rowSums(unc_searchesdf)/10
+rowSums(unc_hitsdf)/10
+
+```
+We can see by the ratio here that Blacks and Whites are actually searched more marginally than hispanics and Asians, so the officers' prior beliefs may be skewed marginally towards searching whites and blacks equally, and asians and hispanics equally. We can see though that there is a 7 percent error rate in Asians and Hispanics, where if they are searched, there were no hits. The error rate for blacks and whites are abotu the same, 6 percent. Since the error rate overall is consistent (if you are searched, the officer about 7 percent of the time in this department will not get a hit), there is not much bias; this could, therefore, be suggestive evidence that there is not much racial bias in the UNC police department, and that officers' beliefs of whether someone has contraband are not based on race as much as other factors. Note this is only relevant for the UNC department, and not an indicator for other departments. 
+
+#1.3 Criticism 
+The criticism that most caught my eye was that of Davies, Pierson et. al's 'Algorithmic decision making and the cost of fairness'. Algorithm fairness has been a widely debated topic since machine learning techniques have come into play, but the reason this paper applies is because they try to define fairness as a "constrained optimization", trying to maximize public safety while still being fair with respect ot race. They end up showing that the optimum is doing an unconstrained algorithm, which maximizes public safety but also holds all individuals to the same standard, regardless of race. 
+
+The paper shows that when trying to find decision thresholds, observed or unobserved, and apply them for policy, will deviate from the aforementioned "unconstrained optimum". They argue that a single decision threshold, or the threshold test from this paper, can create more racial disparities, and that even a distribution of thresholds and sticking to such a posterior distribution can propagate disparities. They state that rates of detention or false positives are poor proxies for actual thresholds. In this way, they critique this paper since we used stops and searches as proxies for thresholds, and this may not be a good proxy for false positive rates; note that both papers, however, agree that infra-marginality is an issue. Another issue this paper shows is that the decision of each individual (in our case, a police officer to stop and search), indicates the police officer's evaluation of the probability of there being contraband in the car. This may not be true-- a police officer can be stopping a car because of a requirement to give away a certain amount of tickets per period, and an officer may be more inclined to search cars if he/she has not hit the requirement for giving away tickets. Thus this probability could be skewed and thus bias the posterior probability distributions. 
+
+I think this is the most substantial criticism because it ties in the issue of assuming what searching a car represents in probability terms, but also talks about algorithmic fairness in these very human-based decision scenarios. Detecting bias is tricky and they show that even when detecting bias we must be aware of the fairness concerns. 
+#2
+```{r}
+library(haven)
+unzip("100.00019026_supp.zip")
+oregon <- as_factor(read_dta(file.path("19026_supp", "Data", "individual_voting_data.dta")))
+library(dplyr)
+oregon <- transmute(oregon,
+                    V = vote_presidential_2008_1, # voted in Nov 2008?
+                    M = ohp_all_ever_nov2008 == "Enrolled", # had Medicaid in Nov 2008?
+                    L = treatment, # won lottery in spring 2008?
+                    N = numhh_list != "signed self up") # registered additional adults?
+```
+
+#2.1
+
+
+Medicaid increased the probability of voting in the November 2008 general election by 2.549 percentage points, testing against the null hypothesis that there was no effect of medicaid on the probability of voting in the 2008 general election. Note that this 2.549 was measured in the 2010 data as specified by the paper. 
+If the null hypothesis were true, meaning there was no effect of medicaid on the probability of voting in the 2008 election, then there is a 7.3% probability (from the p-value) that this coefficient, 2.549, is observed in the data. 
+
+#2.2
+When doing an IV approach, we must make sure the exclusion restriction and the relevance condition are met-- one, that the only effect of the lottery on voting is through enrolling in medical insurance or medicaid, and two, that there is a connection between being enrolled in medicaid and voting. 
+That is why in my DAG, I have the author's DGP of the lottery affecting medicaid enrollment effecting voting, but also show that there could be some confounding variables. As stated by the paper, the number of adults in households could potentially have an effect on enrollment and voting, which is why my N variable can affect M and V. The paper also states that it is possible that the exclusion restriction may not be met, for example, if that “winning” something from the government affects voting behavior directly, essentially of L affects V. We would want to close all channels in which this occurs, so we only isolate the connection of L->M->V to ensure the DGP has a valid instrument. Also, note that it is always important to check for reverse causality, that perhaps voting behavior affects signing up to be insured. 
+```{r}
+library(rstan)
+library(rstantools)
+library(CausalQueries)
+
+```
+```{r}
+#exclusion restriction L---V NO connection, relevance condition M-V do have a connection, reverse causality 
+
+model<-make_model("L->M->V; N->M")%>%set_confound(confound=list("L<->V", "N<->V"))
+set_restrictions(model, c(decreasing('M', 'V')))
+plot(model)
+
+```
+
+
+```{r} 
+post<- update_model(model, data= oregon, chains=1)
+
+```
+```
+How would you describe the posterior distribution of the ...
+• Average Treatment Effect of Medicaid
+• Average Intent to Treat Effect of winning the Medicaid lottery
+• Average Treatment Effect of Medicaid among those with Medicaid
+• Average Treatment Effect of Medicaid among those without Medicaid
+• Average Treatment Effect of living in a household with more than one adult
+#2.4
+```{r}
+
+query_model(post, using= 'posteriors', queries=c(ATE_MV="V[M=1]-V[M=0]",
+                                                 ITT_LV= "V[L=1]-V[L=0]",
+                                                 ATE_M1="V[L=1, M = 1] - V[L = 0, M = 1]",
+                                                 ATE_M0= "V[L=1, M=0]-V[L=0, M=0]", 
+                                                 ATE_HH1="V[L=1, N = 1] - V[L = 0, N = 1]"))
+
+
+
+
+
+
+```
+Notice that the ATE_M1 and ATE_M0 above are 0. This is sensible because it states that ATE_M1, the average treatment effect of medicaid with those with medicaid, is 0. There is no change of voting behavior if you already have medicaid and you win the lottery, since you already have it so there is no actual change when the treatment is applied. For ATE_M0, this shows there is no average treatment effect of medicaid among those without medicaid, meaning if you win the lottery and do not qualify for the medicaid or chose to deny the win, versus if you did not win the lottery in the first place, does not effect your voting behavior. This makes sense considering both those populations at the end of the day do not have medicaid so there is no change in outcome. 
+
+The ATE of medicaid on voting is centered around -.027, implying that in general, there is a small and/or negative relationship between voting and medicaid. Voting given you have medicaid as compared to voting given you do not have medicaid has a  bigger effect than the other cases mentioned below. 
+```{r}
+d <- c(query_distribution(post, using = "posteriors",
+query = "V[M=1]-V[M=0]"))
+hist(d, prob = TRUE, main = "", xlab = "ATE of Medicaid")
+```
+The ITT effect of winning the medicaid lottery has much more density than the ATE effect of medicaid, showing that if one wins the lottery, they have an average of -.0007 probability of voting in the next election. Voting given you won the lottery as compared to if you didn't is on average .0007. 
+```{r}
+ITT_LV <- c(query_distribution(post, using = "posteriors",
+query = "V[L=1]-V[L=0]"))
+hist(ITT_LV, prob = TRUE, main = "", xlab = "ITT of Winning Medicaid Lottery")
+```
+
+If one lives in a household with one adult, they are much more probable to have a higher ATE than if they do not of voting if they win the lottery as compared to those who did not win the lottery within households with more than one adult. The average here is -.006. 
+```{r}
+ATE_HH1 <- c(query_distribution(post, using = "posteriors",
+query = "V[L=1, N = 1] - V[L = 0, N = 1]"))
+hist(ATE_HH1, prob = TRUE, main = "", xlab = "ATE of Living in a Household > 1 Adult")
+```
+#2.5 
+
+ATE= V[M=1]- V[M=0] 
+This means that the ATE of medicaid on voting would be biased, and would be lower, since the ATE is the difference between those who voted given medicaid and those who voted given they were not given medicaid. This means, for the legal immigrants, many could be given medicaid but are not allowed to vote, so the first term above, V[M=1], would be smaller, making the overall difference smaller, biasing the ATE downwards. We do not have information on whether the legal immigrants would have voted if they could have, because that is unobserved information. Thus not including the citizenship variable means we are not including and controlling for a confounding variable into the DAG, that effects V, the outcome, through M, enrolling for medicaid. If there is a sufficient amount of legal immigrants that win the lottery, and enroll for medicaid, there is a sufficient number of observations in our IV chain in the DAG (L->M->V) that are not voting because they cannot, thus biasing our ATE. 

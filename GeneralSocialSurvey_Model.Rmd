@@ -1,0 +1,242 @@
+---
+title: "HW5"
+author: "Pooja Patel"
+date: "3/29/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### 1.1
+
+The authors use figure 11 to show how the probability of the coefficient falling within the range within 5-10 percent, about the relationship between each of the variables listed and logged deaths at different points in time. They are trying to make an inference between the share of population above 65, the healthcare index,healthcare spending per capita, and health data quality with  logged deaths at different points in time. The inference would be a positive and/or negative relationship between each of the variables and the outcome variable, logged deaths.Figure 11 specifically shows the relations  between the controls and the outcomes to claim there is a relationship between the independent variables and dependent variable. 
+
+
+### 1.2
+
+The authors include social, political, economic, and demographic variables to try to predict the relationship between those variables and coronavirus logged deaths in total. Putting in the error term, frequentists usually assume that the errors are homoskedastic, that they are normally distributed and do not have a increasing or decreasing relationship with the outcome variables or the independent variables. In the context of the authors' models, that would mean that any omitted variables are not omitted variables, and the beta coefficients are close to the 'true' relationship between these variables. The downside to this is this assumption that there is little to no omitted variable bias, that all the necessary variables are already specified as independent variables in the regression. 
+
+If, however, the errors are heteroskedastic (as they often are in the real world case, especially when estimating death due to coronavirus across all of these variables), then the downside is that there is inherent endogeneity in the specification of the model, meaning the sample coefficients will be biased and not resemble the true relationship, even if the errors are robust. Thus the effects of political, social, economic variables on coronavirus deaths could look like they are stronger or weaker than they actually are. 
+
+
+### 1.3 
+```{r}
+library(readr)
+library(dplyr)
+df <- suppressWarnings(read_csv("https://wzb-ipi.github.io/corona/df_full.csv",
+col_types = cols(X1 = col_skip(),
+date = col_date(format = "%Y-%m-%d"), infections_ebola = col_integer()))) %>%
+mutate(checks_veto = ifelse(checks_veto < 0, NA, checks_veto), pop_tot = pop_tot * 10^6)
+data_date <- max(df$date_rep, na.rm = TRUE)
+df_today <- df %>% filter(as.Date(date_rep) == data_date)
+```
+```{r}
+measures <- read_csv("https://raw.githubusercontent.com/wzb-ipi/rep_corona/master/measures.csv")%>%
+  filter(include == 1)
+
+families <- c("state_cap_vars", "pol_account_vars", "social_vars", "econ_vars", "phys_vars", "epi_vars", "health_sys_vars")
+
+for(v in families){
+assign(v, filter(measures, family == v)$vars %>% as.character)
+assign(paste0(v, "_labels"), filter(measures, family == v)$labels %>% as.character)
+}
+
+controls <- c("pop_tot_log", "share_older", "healthcare_qual", "health_exp_pc", "detect_index") 
+controls_labels <- c("Total population (logged)", "Share 65+", "Healthcare quality index (GHSI)", "Healthcare spending/capita", "Health data quality")
+
+```
+```{r}
+cbind(state_cap_vars, state_cap_vars_labels)
+cbind(pol_account_vars, pol_account_vars_labels)
+cbind(social_vars, social_vars_labels)
+cbind(econ_vars, econ_vars_labels)
+cbind(phys_vars, phys_vars_labels)
+cbind(epi_vars, epi_vars_labels)
+cbind(health_sys_vars, health_sys_vars_labels)
+cbind(controls, controls_labels)
+```
+
+
+
+
+
+```{r}
+predictions <- matrix(c(NA), nrow = nrow(df_today), ncol = 2)
+
+for (i in 1:nrow(df_today)) {
+  train <- df_today[-i, ]
+  test <- df_today[i, ]
+  lm <- lm(deaths_cum_log ~ pop_tot_log + share_older + healthcare_qual + 
+     health_exp_pc + detect_index, data = train)
+  predictions[i, 1] <- test$deaths_cum_log
+  predictions[i, 2] <- predict(lm, test)
+}
+
+```
+```{r}
+colnames(predictions) <- c('Actual', 'Predicted')
+predictions_df <- as.data.frame(predictions)
+plot(Actual ~ Predicted, data = predictions_df, pch = 19, cex = 0.5)
+abline(a= 0, b= 1, lty= 2)
+```
+
+### 1.4 
+
+First subsetting the data with the variables we need and dropping some NaNs so that the observations are equal for loo_compare later:
+```{r}
+row.has.na <- apply(df, 1, function(x){any(is.na(x))})
+sum(row.has.na)
+
+myvars <- c('share_older', 'healthcare_qual', 'health_exp_pc', 'detect_index',  'vdem_libdem', 'pr', 'vdem_mecorrpt', 'oil', 'electoral_pop', 'woman_leader', 'dist_anyelec', 'polar_rile', 'pos_gov_lr', 'trust_gov', 'al_etfra', 'al_religfra', 'gini', 'trust_people', 'migration_share', 'share_powerless', 'deaths_cum', 'pop_tot')
+df <- df_today[myvars]
+df_subset<-na.omit(df)
+
+```
+
+```{r}
+library(rstanarm)
+library(rstan)
+
+```
+### 1.5
+```{r}
+post_1 <- stan_glm(cbind(round(deaths_cum), round(pop_tot - deaths_cum)) ~ 
+                     share_older + healthcare_qual +  health_exp_pc + detect_index, 
+                   data = df_subset, 
+                   family = binomial, 
+                   prior_intercept = normal(location = round(10^0.9 + 10^1.2 + 10^0.4 + 10^0.9), scale = round(10^0.7)),
+                   prior = normal(location = 0, scale = 1), QR = T, seed = 12345)
+post_2 <- stan_glm(cbind(round(deaths_cum), round(pop_tot - deaths_cum)) ~ 
+                     share_older + healthcare_qual +  health_exp_pc + detect_index + vdem_libdem + pr + vdem_mecorrpt + oil + electoral_pop + woman_leader + dist_anyelec + polar_rile + pos_gov_lr, 
+                   data = df_subset, 
+                   family = binomial, 
+                   prior_intercept = normal(location = round(10^0.9 + 10^1.2 + 10^0.4 + 10^0.9 + 10^0.3 + 10^0.2 + 10^1.2 + 10^(-0.05) + 10^0.5 + 10^0.7 + 10^(-0.5) + 10^0.4 + 10^0.6), scale = round(10^0.9)),
+                   prior = normal(location = 0, scale = 1), QR = T, seed = 12345)
+post_3<-stan_glm(cbind(round(deaths_cum), round(pop_tot - deaths_cum)) ~ 
+                     share_older + healthcare_qual +  health_exp_pc + detect_index + trust_gov + al_etfra + al_religfra + gini + trust_people + migration_share + share_powerless, 
+                   data = df_subset, 
+                   family = binomial, prior_intercept = normal(location = round(10^0.9 + 10^1.2 + 10^0.4 + 10^0.9 + 10^(-0.05) + 10^(-0.3) + 10^(-0.06) + 10^0.3 + 10^(-0.8) + 10^(-0.4) + 10^(-0.4)), scale = round(10^0.8)),
+         prior =  normal(location = 0, scale = 1), QR = T, seed = 12345)
+
+post_4 <- stan_glm(cbind(round(deaths_cum), round(pop_tot - deaths_cum)) ~ 
+                     share_older + healthcare_qual +  health_exp_pc + detect_index + vdem_libdem + pr + vdem_mecorrpt + oil + electoral_pop + woman_leader + dist_anyelec + polar_rile + pos_gov_lr + trust_gov + al_etfra + al_religfra + gini + trust_people + migration_share + share_powerless, 
+                   data = df_subset, 
+                   family = binomial, prior_intercept = normal(location = round(10^0.9 + 10^1.2 + 10^0.4 + 10^0.9 + 10^0.3 + 10^0.2 + 10^1.2 + 10^(-0.05) + 10^0.5 + 10^0.7 + 10^(-0.5) + 10^0.4 + 10^0.6 + 10^(-0.05) + 10^(-0.3) + 10^(-0.06) + 10^0.3 + 10^(-0.8) + 10^(-0.4) + 10^(-0.4)), scale = round(10)),
+                   prior =  normal(location = 0, scale = 1), QR = T, seed = 12345)
+```
+
+```{r}
+loo1<-loo(post_1, k_threshold= .7)
+loo2<- loo(post_2, k_threshold = .7)
+loo3<- loo(post_3, k_threshold= .7)
+loo4<- loo(post_4, k_threshold= .7)
+```
+
+
+```{r}
+print(loo_compare(loo1, loo2, loo3, loo4))
+```
+
+
+
+We can see from the model weights that post_4 has the highest expected log predictive dnesity. The set of weights that work are 0, 0, .003, and .997 for models 1, 2, 3, and 4. (4 is the one with all of the variables included). 
+```{r}
+print(loo_model_weights(stanreg_list(post_1, post_2, post_3,post_4), method= "pseudobma"))
+
+
+```
+### 1.6 
+```{r}
+PPD<- posterior_predict(post_4, draws= 1000); dim(PPD)
+lower<- apply(PPD, MARGIN= 2, quantile,probs= 0)
+upper<- apply(PPD, MARGIN= 2, quantile, probs= 1)
+with(df_subset, mean((deaths_cum)>lower & (deaths_cum)<upper))
+```
+Model 4 (the one with all the variables included), may be overfitting some data but is overall decent because on average, about 2% of the data rests in the lower and upper quantiles. 
+
+### 2.1 
+```{r}
+
+youtube <- read_csv("https://osf.io/25sz9/download")
+alpha <- rnorm(1, 10.97, 0.13)
+beta1 <- rnorm(1, -0.39, 0.14)
+beta2 <- rnorm(1, 0.64, 0.14)
+phi <- rexp(1)
+loglike<- dnbinom(youtube$views2, size= phi, mu=alpha , log= T)
+print(sum(loglike))
+```
+The number above, loglike, is the log=likelihood of these realizations. 
+
+### 2.2 
+```{r}
+#need for loop for each of the observations 
+prior_dist <- matrix(c(NA), nrow = nrow(youtube), ncol = 1000)
+youtube$scol_scale<- (youtube$scol-mean(youtube$scol))/sd(youtube$scol)
+youtube$age2_scale<-(youtube$age2-mean(youtube$age2))/sd(youtube$age2)
+for (i in 1:nrow(youtube)) {
+  n_n <- alpha + beta1*youtube$scol_scale[i] + beta2*youtube$age2_scale[i]
+  mu_n <- exp(n_n)
+  for (j in 1:1000) {
+    prior_dist[i, j] <- rnbinom(1, size=phi, mu = mu_n)
+  }
+}
+```
+```{r}
+length(prior_dist[prior_dist > 500000])/length(prior_dist)
+```
+We can see here that the prior distribution is reasonable as it only puts a probability of 1.456% on the observations that are greater than half a million views. 
+
+### 2.3 
+```{r}
+post<- stan_glm.nb(views2~scol+ age2, 
+                   data= youtube, 
+                   prior_intercept=normal(10.97, 0.13),
+                   prior_aux = exponential(1), 
+                   prior = normal(c(-0.39, 0.64), c(0.14, 0.14)))
+
+```
+```{r}
+print(post)
+summary(post)
+```
+We can see from this model summary that the coefficient on scol, B1, in posterior, is on average -0.1. This means on average, there is a likelihood that how accurate the video is is negatively correlated with the views. 
+```{r}
+post_predicted<- posterior_epred(post, data=youtube)
+hist(post_predicted)
+```
+Also, we can see that most of the distribution is skewed right, where there is a higher and higher frequency of views as the coefficients move towards 0. 
+
+### 2.4 
+```{r}
+post2<- stan_gamm4(views2~s(youtube$age2_scale,youtube$scol_scale), 
+                   data=youtube, 
+                   family=neg_binomial_2())
+```
+
+```{r}
+print(post2)
+```
+```{r}
+plot_nonlinear(post2)
+```
+Notice from this graph that in posterior, the two variables of how long a video has been up and the accuracy of the video have a generally positive relationship across all levels after scaling. This relationship tends to become stronger as the length of the video goes on for longer, as the slopes are generally flatter towards the bottom right of the graph. 
+### 2.5 
+
+```{r}
+loo_post2<- loo(post2)
+loo_post<- loo(post)
+loo_compare(loo_post2, loo_post)
+```
+We can see that the smoothing parameter has the lower elpd_difference. 
+```{r}
+loo_model_weights(stanreg_list(post2, post))
+```
+The best model weights for maximizing elpd is just 0 and 1, where the GLM is better in estimation (linear) than the non-linear model. 
+```{r}
+plot(loo(post2), label_points= TRUE)
+```
+
+
+There are some observations that are influential on the posterior distribution for the smoothing importance sampling estimator to be valid, such as observations 2, 9, 14, 25, 26, and 36. It looks like adding in a threshold of k= .5 may improve the elpd for the smooth, non-linear model. 

@@ -1,0 +1,252 @@
+---
+title: "FinalBayes"
+author: "Pooja Patel"
+date: "4/26/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+set.seed(1234)
+```
+
+## 1.1
+The probability that someone has covid given a positive lateral flow test can be written as the following: 
+Let A= having covid, and B= having a positive lateral flow test. 
+Then P(A|B)= P(B|A)*P(A)/ P(B). 
+P(A)= Probability of having covid= 20,000/1,000,000= 2/100= 1/50 
+P(B)= Probability of having a positive lateral flow test= .02
+P(B|A)= Probability of having a positive lateral flow test given you have covid= 1-(false positive probability)= .95
+Thus P(A|B)= .75. 
+
+
+## 1.2
+
+Peuplier's beta prior beliefs are that 20/1000=1/50 
+Then P(A|B)= P(B|A)*P(A)/ P(B). 
+Let A= succeeding in explaining Bayes' theorem 
+B= You asking 
+P(A)= y/1000 (given by question)
+P(B)= 1 (you ask all 1000 as given by the quesiton)
+P(B|A)= 1 (trivial)
+y/1000= 20/1000 (applying Bayes Theorem)
+y= 20 to be consistent with Peuplier's beliefs. 
+
+## 1.3 
+
+A Bayesian would definitely seperate out all the populations and in this case set up 3 Bayes' problems as the following: 
+
+P(having any excess deaths| they were injected 3 weeks after )= 
+  P(injected | excess deaths) * P(excess deaths)/ P(injected). 
+P(having any excess deaths| they were injected 3 months after(adults))= sameformula as above 
+P(having any excess deaths | they were injected 3 months after (elderly))= same formula as above
+
+Whichever of the three is the highest probability would be targetted first to decrease the probability of excess deaths, and go down in a increasing to decreasing manner of probabilities. 
+This is, of course, taking a utilitarian approach wehre we are triyng to minimize costs, which is excess deaths in this case, for society. 
+
+We could find P(injected) by just tracking the amount of subpopulations that are injected. 
+P(excess deaths) can be found through hospital and death certificate data. 
+P(injected| excess deaths) captures the surge in vaccinations after higher waves of covid. 
+
+
+## 1.4 
+
+A common frequentist approach for demonstrating reasonable probability of succeeding in the case would be to run some sort of regression model, to look at correlations and argue for some sort of causality. Since it is a 0/1 case, whether there is a 'reasonable' probability or whether there is not, then 1 would indicate there is and 0 would indicate there is not. This outcome variable which is bivariate would be a function of the judicial proceedings, the variables that have to do with public interest, etc. If the coefficients on these variables were significant and showed it was more towards the 1 than the 0 (more than half the time), then the argument would be this correlation shows some type of causal claim towards probability succeeding to a level of statistical signifance (another frequentist metric) in which the p value is less than .05%, so there is  a 95% chance that the real coefficient of correlation is between the given standard errors. 
+
+A Bayesian approach to this question would be to actually calculate (and hopefully iterate many times to gain a reliable posterior distribution) of the probability of succeeding given that there is a judicial claim or public interest. It would look as follows: 
+
+Then P(A|B)= P(B|A)*P(A)/ P(B). 
+P(succeeding | judicial or public interest claim)= P(having a claim | succeeds) * P(succeeding)/ P(having a claim). 
+
+I think a judge would take a more frequentist approach, since even jurors use majority rule and causality/ correlation beliefs to make decisions in today's legal system. For example if there are a high amount of witnesses of Postle's playing strategy at the trial, then the judge may use this as a "predictor" without setting his own prior beliefs of cheating, and think that the sheer amount of higher witnesses of Postle playing means that Postle probably cheated. Alternatively if many people defended Postle's approach to playing and said he did not cheat, the higher amount of witnesses on that side may sway the judge, even though a number of witnesses with their own probabilities and beliefs of Postle cheating should not be the -only- way of making a judgement, but often times in today's legal system, is. 
+
+## 2 
+
+```{r}
+library(readr)
+library(readxl) 
+dataset <- read_excel("Supplementary-File-Select-county-level-factors-04-06.xlsx", 
+                                      sheet = "County Factors", skip = 1, # to not use the original column names
+                                      col_names = c("FIPS", "County", "State", "Hesitant", "StronglyHesitant",
+                                                    "Age18_24", "Age25_39", "Age40_54", "Age55_64", "Age65_",
+                                                    "Male", "Hispanic", "White", "Black", "Asian", "OtherRace",
+                                                    "LessHS", "HighSchool", "SomeCollege", "CollegeDegree",
+                                                    "Married", "Widowed", "Divorced", "NeverMarried", "SVI",
+                                                    "CVAC", "Vaccinated18_", "Vaccinated65_"),
+                                      col_types = c("skip", "text", "text", "skip", "skip",
+                                                    "skip", "numeric", "numeric", "numeric", "numeric", "numeric",
+                                                    "numeric", "skip", "numeric", "numeric", "numeric", "skip",
+                                                    "numeric", "numeric", "numeric", "skip", "numeric", "numeric",
+                                                    "numeric",
+                                                    "skip", "skip", "skip", "numeric"))
+
+dataset$Vaccinated65_ <- dataset$Vaccinated65_ / 100 # convert from percentage to proportion 
+dataset <- dataset[!is.na(dataset$Vaccinated65_), ] # drop a few observations with missing values
+```
+
+```{r}
+summary(lm(dataset$Age65_~ dataset$Male + dataset$CollegeDegree+ dataset$Black))
+
+```
+
+## 2.1 
+```{r}
+black <- dataset$Black - mean(dataset$Black) # centered and in raw units 
+gender <- (dataset$Male - mean(dataset$Male)) 
+college<- (dataset$CollegeDegree - mean(dataset$CollegeDegree)) 
+
+alpha_ <- rnorm(1, mean = .50108, sd = .02) 
+beta_1_ <- rnorm(1, mean = -.09, sd = 0.0058) 
+beta_2_ <- rnorm(1, mean = -.433, sd = 0.05) 
+beta_3_<- rnorm(1, mean= -.12 , sd=.008 )
+eta_ <- alpha_ + beta_1_ * black + beta_2_ * gender + beta_3_ * college
+mu_ <- 1/(1+exp(-1*eta_)) 
+phi_ <- alpha_/mu_ 
+```
+
+```{r}
+y_ <- t(replicate(1000, { 
+  beta_1_ <- rnorm(1, mean = -.09, sd = 0.0058) 
+  beta_2_ <- rnorm(1, mean = -.433, sd = 0.05)
+  beta_3_<- rnorm(1, mean= -.12 , sd=.008 )
+  eta_ <- alpha_ + beta_1_ * black + beta_2_ * gender + beta_3_ * college
+  mu_ <- 1/(1+exp(-1*eta_))  
+  phi_ <- alpha_/mu_
+  rbeta(length(mu_), mu_*phi_, (1-mu_)*phi_) })) 
+
+
+```
+## 2.2 
+```{r}
+library(ggplot2)
+bayesplot::ppc_intervals(colMeans(y_), y_, x = colMeans(y_)) + scale_x_continuous(trans = 'log10') + scale_y_continuous(trans = 'log10') + xlab("Prior Predictive Mean (log scale)") + ylab("Prior Predictive Distribution")
+```
+We can see from the pp_check above, with the log scale, that the prior predictive mean is well centered across the values of .58-.66. There is not much skew, but there is some extra weight on values closer to 1 due to the selection of predictor variables. 
+
+Below is the amount of probability put on values greater than .9: 
+```{r} 
+length(y_[y_ > .9])/length(y_)
+```
+
+This probability is less than .4. 
+
+This is the proability put on values very close to 0: 
+```{r}
+length(y_[y_ < .1])/length(y_)
+```
+
+This is very low as well, close to .15.  
+
+The center will thus have 1-(.4+.15)= .45 of the weight of the probability distribution. 
+
+## 2.3
+```{r}
+library(rstan)
+library(rstanarm)
+
+post<- stan_glm(Vaccinated65_~Black+ Male+ CollegeDegree, 
+                data= dataset,
+                family = mgcv::betar(link= 'logit'),
+                prior_intercept=normal(0.501081,0.023792), 
+                prior = normal(.09+.433+.12, .0058+.05+008))
+```
+## 2.4 
+```{r}
+plot(post, pars = c("Male", "Black"))
+
+
+
+```
+Notice that there is a positive relationship (in likelihood terms) of being male and being in the proportion of those over 65 who are vaccinated. This would mean also (since it is a bivariate variable) that women over 65 are less likely to be vaccinated as compared to their counterparts. 
+```{r}
+summary(post)
+```
+
+We can see here that there is a positive relationship between being male and the proportion of those who are over 65 and vaccinated, although the standard deviation is fairly high as compared to other covarites. 
+```{r}
+post_predicted<- posterior_epred(post, data=dataset) 
+hist(post_predicted)
+```
+This is simply a relationship between all the predictors and the outcome, being in the over 65 age group. 
+## 2.5 
+```{r}
+plot(loo(post), label_points= TRUE)
+```
+```{r}
+posterior_vs_prior(post, prob= .5)
+```
+Notice that there is a deviation of phi from the prior to the posterior, which would imply that the coefficients for the posterior predictions deviate from the observed data. 
+
+## 3 
+
+```{r}
+library(readr) 
+polls <- read_csv("2020 US presidential election polls - all_polls.csv",col_types = cols(start.date = col_date(format = "%m/%d/%Y"), end.date =col_date(format = "%m/%d/%Y"), entry.date.time..et. =col_datetime(format = "%m/%d/%Y %H:%M:%S")))
+
+polls$end.date[is.na(polls$end.date)] <- "2020/10/08" # fix misformatted dates 
+polls$mode[112] <- "Online" # fix typo 
+polls$state[polls$state == "--"] <- "USA" # these were national polls 
+polls$days_to_election <- as.integer(as.Date("11/03/2020", format = "%m/%d/%Y")-polls$end.date)
+```
+
+• state: The state abbreviation where people were polled or “USA” if the poll was intended to be nationally representative
+
+• pollster: The company conducting the poll, which are of varying quality and possibly lean toward the Republicans or Democrats
+
+• population: Either “a” for adults, “lv” for likely voters (as determined by the pollster but a necessary condition is that the person be registered to vote or live in a state with same-day voting registration), or “rv” for registered voters
+
+• biden_margin: The difference between the percentage of respondents favoring Joe Biden and Donald Trump, which is the outcome variable
+
+• days_to_election: The number of days before the presidential election that the poll took place
+
+## 3.1 
+
+It would be inappropriate to model biden_margin with random effects or mixed effects models because one, all variables would have to be random variables, but some of the dependent variables may not be; for example the polls that are being conducted can be endogenous to other omitted variables. 
+Secondly, there is an inherent assumption in mixed effects that the  data is drawn from groups from different populations whose differences relate to only those groups. So the differences between a republican or a democrat only would relate to the groups of republican or democrat (the parties), rather than perhaps the way a republican or democrat individually varies amongst one another outside of the party grouping. For random effects to work in the this example it is necessary that the  effects of each variable (days to election, population, pollster) be uncorrelated with eachother, which is not necessarily the case: perhaps there are more likely voters as the days to the election decrease, or the polling is a function of what state one is in).
+
+
+## 3.2 
+```{r}
+library(brms)
+library(rstan)
+library(rstanarm)
+
+
+post2<- brm(biden_margin~ days_to_election+ population+ (1 | state),
+            data= polls, 
+            family= gaussian,
+            prior=prior(normal(-.0055+-4.51+-2.99, .003+1.4+1.44)),
+            seed= 1234, chains = 2, cores = 2 )
+hist(posterior_predict(post2))
+            
+```
+
+
+
+## 3.3
+```{r}
+predict_df <- data.frame(state = sort(unique(polls$state)), pollster = NA_character_, population = "lv",
+                         days_to_election = 0L)
+```
+
+```{r}
+post3<-posterior_predict(post2, newdata = predict_df,re_formula = ~(1 | state))
+hist(post3)
+```
+The following is the posterior probability that Biden will win and obtain more votes than trump: 
+```{r} 
+length(post3[post3> .1])/length(post3)
+```
+
+
+## 3.4
+```{r}
+plot(loo(post3), label_points= TRUE)
+```
+The observations that have the highest values are 48, 35, and 39, which are all of USA, Georgia, and Illinois, which looks like generally swing states for the latter two. The unusual characteristics include for Georgia that it was 1 day before the election adn the biden margin was negative. For Illinois, it was online with 2 days from the election with a very strong positive biden margin. And for the USA poll, it was 2 days from the election with a positive Biden margin. It seems that all these three values were very close to the election date, and had online or phone call polling rather than in person. 
+
+
+

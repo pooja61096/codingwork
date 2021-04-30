@@ -1,0 +1,311 @@
+---
+title: "GR5065 Homework 2"
+date: "Due February 9, 2021 at 8PM New York Time"
+author: "Pooja Patel"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+    number_sections: yes
+urlcolor: blue
+---
+
+```{r, setup}
+# call the set.seed function once here to make the knitting conditionally deterministic
+set.seed(5210)
+```
+
+# Equilibrium Climate Sensitivity
+
+
+
+## Drawing from the prior
+```{r}
+numerator<- rnorm(1000000, mean= 0, sd= .74 )
+denom<- rnorm(1000000, mean= 0, sd= .8)
+
+```
+
+
+## Truncating the prior
+The proportion that satisfies the condition of being in the interval [0, 10] is 47.195%. 
+```{r}
+
+
+ECS<- numerator/denom
+satisfied <- ifelse((ECS < 0 | ECS > 10), 0, 1)
+ECS_satisfied <- ECS[satisfied == 1]
+proportion_satisfied<- (length(ECS_satisfied)/ 1000000) * 100
+
+```
+
+## Describing the truncated prior
+```{r}
+sd_ECS_satisfied<- sd(ECS_satisfied)
+mean_ECS_satisfied<- mean(ECS_satisfied)
+lower_tailtrue<- c(1.5, 2.0)
+col1_and_2<- pnorm(lower_tailtrue, mean= mean_ECS_satisfied, sd= sd_ECS_satisfied)
+higher_tailtrue<- c(4, 4.5, 6)
+othercols<- pnorm(higher_tailtrue, mean= mean_ECS_satisfied, sd= sd_ECS_satisfied, lower.tail= FALSE)
+
+col_name= c('P(X<1.5)', 'P(X<2.0)', 'P(X>4)', 'P(X>4.5)', 'P(X>6)')
+row_name= c('Prior')
+values= c(.501, .612, .08, .04595, .00576)
+matrix_1= matrix(values, nrow= 1, ncol= 5)
+rownames(matrix_1)<- row_name
+colnames(matrix_1)<- col_name
+
+print(matrix_1)
+
+```
+
+## PDF of a Ratio of Normals
+Note that I integrated from 0 to 10, but increasing this range to negative to positive infinity sums up to 1, so this is a valid pdf, since its integral should equal 1. 
+```{r}
+dratio <- function(z, mu_X = -3.7, mu_Y = -1.6,
+                   sigma_X = 0.2 * 3.7, sigma_Y = 0.5 * 1.6) {
+  a <- sqrt(((1/(sigma_X)^2) * z^2) + (1/(sigma_Y)^2))
+  b <- ((mu_X/(sigma_X)^2) * z) + (mu_Y/(sigma_Y)^2)
+  c <- (mu_X^2/sigma_X^2)+ (mu_Y^2/sigma_Y^2)
+  d <- exp((b^2 - c * (a^2))/(2 * (a^2)))
+  pdf_dratio <- ((b * d)/a^3) * (1/(sqrt(2*pi) * sigma_X * sigma_Y)) * (pnorm(b/a) - pnorm(-b/a)) + 
+    (1/(a^2 * pi * sigma_X * sigma_Y)) * exp(-c/2)
+  return(pdf_dratio)
+}
+output1<- dratio(ECS)
+trial<-integrate(dratio, 0, 10)
+print(trial)
+
+```
+
+## Describing the truncated prior, part II
+Notice the min and max values of the dratio function show that the prior is between 0 and 10. I applied this function to the untruncated ECS values and the values fall within limit. 
+```{r}
+min(dratio(ECS)) 
+max(dratio(ECS))
+#hopefully between 0-10, as it is. 
+
+```
+
+
+## The likelihood function components
+
+```{r}
+e <- c(Low_ii = .25, Low_iii = .35, Low_iv = .2, High_i = .75, High_ii = .65, High_iii = 0.6)
+c <- c(Low_ii = 1.5, Low_iii = 1.5, Low_iv =  2, High_i = 4.0, High_ii = 4.5, High_iii = 4.5)
+likelihood <- function(chi, e_j, c_j) {
+  f = ((1 - 2*e_j) * (2*pnorm((chi - c_j)*sqrt(2)) - 1) + 1)/2
+}
+
+
+curve(likelihood(chi, e[1], c[1]), from = 0, to = 7,
+col = "black", ylim = 0:1, xname = "chi", ylab= 'P(e_j| chi)', lty = "solid")
+curve(likelihood(chi, e[2], c[2]), from = 0, to = 7,
+col = "black", ylim = 0:1, xname = "chi", lty = "solid", add = TRUE)
+curve(likelihood(chi, e[3], c[3]), from = 0, to = 7,
+col = "black", ylim = 0:1, xname = "chi", lty = "solid", add = TRUE)
+curve(likelihood(chi, e[4], c[4]), from = 0, to = 7,
+col = "black", ylim = 0:1, xname = "chi", lty = "dotted", add = TRUE)
+curve(likelihood(chi, e[5], c[5]), from = 0, to = 7,
+col = "black", ylim = 0:1, xname = "chi", lty = "dotted", add = TRUE)
+curve(likelihood(chi, e[6], c[6]), from = 0, to = 7,
+col = "black", ylim = 0:1, xname = "chi", lty = "dotted", add = TRUE)
+```
+
+## Posterior PDF
+Note I have tried 2 different ways of graphing the posterior PDF. 
+I also found the distribution of the denominator before finding the distribution of the posterior. 
+```{r}
+
+#Graph try1 
+
+#numerator <- function(chi, e = e[1], c = c[1]) {
+  #num <- likelihood(chi, e[1], c[1]) 
+  #return(num)
+#}
+
+#posterior <- function(chi, e = e[1], c = c[1]) {
+  #post <- numerator(chi) / (dnorm(e[1]))
+  #return(post)
+#}
+
+#curve(posterior(chi, e[1], c[1]), from = 0, to = 10,
+#col = "black", ylim = 0:1, xname = "chi", ylab= 'Posterior', lty = "solid")
+
+#graph is not working. denominator? numerator??? 
+
+```
+```{r}
+#Denominator Distribution
+sd_e<- sd(e)
+mean_e<- mean(e)
+col1_and_2_e<- pnorm(lower_tailtrue, mean= mean_e, sd= sd_e)
+othercols_e<- pnorm(higher_tailtrue, mean= mean_e, sd= sd_e, lower.tail= FALSE)
+
+col_name_2= c('P(X<1.5)', 'P(X<2.0)', 'P(X>4)', 'P(X>4.5)', 'P(X>6)')
+row_name_2= c('Denominator')
+values_2= c(1, 1, 8.66e-54, 1.91e-69, 9.54e-129)
+matrix_2= matrix(values_2, nrow= 1, ncol= 5)
+rownames(matrix_2)<- row_name_2
+colnames(matrix_2)<- col_name_2
+
+print(matrix_2)
+```
+
+```{r}
+#Graph Try 2: 
+#In the paper, to reproduce the row asked for, the authors look at the ECS values <1.5 
+#according to our data, the probability of that occuring regardless of any other conditions, is 
+#the number of times of the ECS<1.5 / total ECS count. 
+satisfied2 <- ifelse((ECS < 1.5 | ECS > 1.5), 1, 0)
+ECS_satisfied2 <- ECS[satisfied == 1]
+proportion_satisfied<- (length(ECS_satisfied2)/ 471950)
+#All of them are less than 1.5 
+#This means that the prior probability in the numerator is 1. 
+#Thus this means posterior= likelihood * 1/ denominator calculated above. 
+out<-function(chi, e_j, c_j){
+  w<-likelihood(chi=c(1:10), e_j=e, c_j=c)/ values_2
+  return(w)
+}
+
+gg<- out(chi, e, c)
+ff<-c(gg)
+plot(ff)
+
+
+```
+```{r}
+b<- values/values_2
+
+col_name_3= c('P(X<1.5)', 'P(X<2.0)', 'P(X>4)', 'P(X>4.5)', 'P(X>6)')
+row_name_3= c('Posterior')
+values_3= b
+matrix_3= matrix(values_3, nrow= 1, ncol= 5)
+rownames(matrix_3)<- row_name_3
+colnames(matrix_3)<- col_name_3
+print(matrix_3)
+```
+
+# Darts
+
+```{r}
+darts::drawBoard(new = TRUE)
+```
+
+## Drawing from a bivariate normal distribution
+
+
+```{r}
+tib_x<- rnorm(100, mean= 0, sd= 42.67)
+price_x<- rnorm(100, mean=0, sd= 17.90)
+
+mean_y_tib<- 0+(-.16)*(68.67/42.67)*(mean(tib_x))
+var_y_tib<- (68.67^2)*(1-(-.16)^2)
+mean_y_price<- 0+(-.22)*(39.13/17.90)*(mean(price_x))
+var_y_price<- ((39.13)^2)*(1-(-.22)^2)
+
+tib_y<- rnorm(100, mean=mean_y_tib, sd= (var_y_tib)^.5)
+price_y<- rnorm(100, mean= mean_y_price, sd= (var_y_price)^.5)
+
+darts::drawBoard(new = TRUE)
+points(tib_x, tib_y, col='red')
+points(price_x, price_y, col= 'green')
+
+
+
+
+```
+
+
+## Normal Prior Distributions
+simpleEm-- variance of X variance of Y , and I am assuming a distribution of mean 50 and standard deviation 10 to draw from. This is because I'm a great dart player, so my standard deviation is very low, and from the paper the result of being a great dart player means that you can aim either in the center or slightly above center, hence the mean of 50. If I were believing things described by univariate normal distributions, I would use the default variance of 100,so standard deviation of 10, and mean 0. 
+s.init= initial guess for marginal vairance= default of 100, which is the simplified Gaussian prediction for this model. 
+
+```{r}
+library(darts)
+my_draw_x= rnorm(100, mean= 0, sd=100)
+my_draw_y= rnorm(100, mean=0, sd=100)
+my_draw_p= runif(100, min= -1, max= 1)
+my_variance_y<- simpleEM(my_draw_y)
+my_variance_x<- simpleEM(my_draw_x)
+my_variance_p<- simpleEM(my_draw_p)
+my_expscore_x<- simpleExpScores(my_variance_x$s)
+my_expscore_y<- simpleExpScores(my_variance_y$s)
+my_expscore_p<- simpleExpScores(my_variance_p$s)
+
+x_var<- sample(my_expscore_x, 1)
+y_var<- sample(my_expscore_y, 1)
+ro_var<- sample(my_draw_p, 1)
+
+x_throw<- rnorm(100, mean=0, sd= ((x_var)^.5))
+
+
+meann<- 0+ ro_var* y_var/x_var*(x_throw)
+sdd<- y_var^2*(1-ro_var^2)
+
+y_throw<- rnorm(100, mean= meann, sd=(sdd))
+
+darts::drawBoard(new = TRUE)
+points(tib_x, tib_y, col='red')
+points(price_x, price_y, col= 'green')
+points(x_throw,y_throw, col= 'black')
+```
+
+# Scoring Function
+
+```{r}
+score <- function(x, y) {
+  stopifnot(is.numeric(x), length(x) == 1, is.numeric(y), length(y) == 1)
+  
+  # convert x and y in Cartesian coordinates to a radius and angle in polar coordinates
+  # https://en.wikipedia.org/wiki/Polar_coordinate_system
+  radius <- sqrt(x ^ 2 + y ^ 2)
+  angle  <- atan2(y, x)
+  
+  if (radius > 170)   return(0)  # misses dartboard
+  if (radius <= 6.35) return(50) # double bullseye
+  if (radius <= 15.9) return(25) # single bullseye
+  
+  margin <- pi / 20
+  interval <- margin * 2
+  small <- pi / 2 - margin - 0:19 * interval
+  large <- pi / 2 + margin - 0:19 * interval
+  bed <- which(angle > small & angle <= large)
+  if (length(bed) == 0) {
+    angle <- angle - 2 * pi
+    bed <- which(angle > small & angle <= large)
+  }
+  S <- darts:::getConstants()$S  # 20, 1, ..., 5
+  score <- S[bed]
+  if (dplyr::between(radius, 99, 107))       score <- 3 * score # in triple ring
+  else if (dplyr::between(radius, 162, 170)) score <- 2 * score # in double ring
+  return(score)
+}
+z<-mapply(score, x_throw, y_throw)
+hist(z)
+```
+
+## Estimating the parameters
+We can see that the first values are similar, the second are very different (the variance of y expected is much higher than my actual variance), and the last value is lower for the generalEM model than my random distribution. Overall though the x variance is also a similar amount of higher than my own. I predict that the more draws I do, such as 1,000,000 for my own throws, the better and more accurate ths generalEM function will match my own random draw. Note that the correlations between the draws are stronger for my own draw than that of the generalEM draw. 
+
+```{r}
+param<- generalEM(z)
+print(param$Sig.final)
+
+```
+```{r}
+listy<- c(x_var^2, y_var^2, ro_var*x_var*y_var)
+print(listy)
+```
+
+## Expected scores
+You can see that these dots are basically on top of each other, making me aim as a regular -okay- dart player should aim, above the center as told by the paper. 
+```{r}
+
+darts::drawBoard(new = TRUE)
+h<-generalExpScores(param$Sig.final)
+g<-drawAimSpot(h, col= 'blue')
+h_prime<-generalExpScores(listy)
+g_prime<-drawAimSpot(h_prime, col= 'green')
+```
+
+
